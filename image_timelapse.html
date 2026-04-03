@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>串連圖片 · 縮時工具</title>
+<link rel="icon" href="icon1.png" type="image/png">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-void:#020810;--bg-deep:#060e1a;--bg-panel:#0a1628;--bg-card:#0d1e35;--bg-hover:#112240;
+  --accent-blue:#1e90ff;--accent-cyan:#00d4ff;--accent-glow:#0066cc;
+  --border-dim:#1a3050;--border-mid:#1e4a7a;
+  --text-bright:#e8f4ff;--text-mid:#8ab0d0;--text-dim:#3a6090;
+  --danger:#ff4060;--success:#00e5a0;--warning:#ffaa00;
+  --grid-line:rgba(30,80,130,0.15);--accent-purple:#a855f7;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg-void);color:var(--text-bright);min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(0,80,180,0.08) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(0,150,220,0.06) 0%,transparent 50%);pointer-events:none;z-index:0;}
+.app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;}
+
+/* HEADER */
+.header{padding:18px 40px;border-bottom:1px solid var(--border-dim);background:rgba(6,14,26,0.88);backdrop-filter:blur(12px);display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;}
+.header-logo{width:36px;height:36px;border:2px solid var(--accent-cyan);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 12px rgba(0,212,255,0.3);}
+.header-title{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;letter-spacing:3px;text-shadow:0 0 20px rgba(0,212,255,0.4);}
+.header-sub{font-size:11px;color:var(--text-dim);letter-spacing:2px;font-family:'JetBrains Mono',monospace;margin-left:auto;}
+
+/* PAGES */
+.page{display:none;flex:1;flex-direction:column;}
+.page.active{display:flex;}
+#home{align-items:center;justify-content:center;padding:60px 40px;}
+.home-hero{text-align:center;margin-bottom:64px;}
+.home-hero h1{font-family:'Orbitron',monospace;font-size:clamp(26px,5vw,50px);font-weight:900;letter-spacing:6px;line-height:1.2;background:linear-gradient(135deg,var(--text-bright) 0%,var(--accent-cyan) 50%,var(--accent-blue) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:16px;}
+.home-hero p{color:var(--text-mid);font-size:13px;letter-spacing:3px;font-family:'JetBrains Mono',monospace;}
+.tools-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;max-width:480px;width:100%;}
+.tool-card{background:var(--bg-card);border:1px solid var(--border-dim);border-radius:16px;padding:36px 32px;cursor:pointer;transition:all .3s cubic-bezier(.25,.8,.25,1);position:relative;overflow:hidden;}
+.tool-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(30,144,255,0.05) 0%,transparent 60%);opacity:0;transition:opacity .3s;}
+.tool-card:hover{border-color:var(--accent-blue);background:var(--bg-hover);transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,80,200,0.25),0 0 0 1px rgba(30,144,255,0.3);}
+.tool-card:hover::before{opacity:1;}
+.tool-icon{width:54px;height:54px;border-radius:14px;background:rgba(30,144,255,0.1);border:1px solid rgba(30,144,255,0.3);display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:18px;transition:all .3s;}
+.tool-card:hover .tool-icon{background:rgba(30,144,255,0.2);border-color:var(--accent-blue);box-shadow:0 0 20px rgba(30,144,255,0.3);}
+.tool-label{font-size:10px;letter-spacing:3px;color:var(--accent-cyan);font-family:'JetBrains Mono',monospace;margin-bottom:7px;}
+.tool-name{font-size:19px;font-weight:700;color:var(--text-bright);margin-bottom:9px;letter-spacing:1px;}
+.tool-desc{font-size:13px;color:var(--text-mid);line-height:1.7;}
+.tool-arrow{position:absolute;bottom:22px;right:22px;color:var(--accent-blue);font-size:18px;opacity:0;transform:translateX(-8px);transition:all .3s;}
+.tool-card:hover .tool-arrow{opacity:1;transform:translateX(0);}
+
+/* INNER */
+.inner-page{flex:1;display:flex;flex-direction:column;padding:28px 36px;max-width:1600px;width:100%;margin:0 auto;}
+.page-header{display:flex;align-items:center;gap:14px;margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--border-dim);}
+.back-btn{background:transparent;border:1px solid var(--border-mid);color:var(--text-mid);padding:7px 14px;border-radius:8px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:1px;transition:all .2s;}
+.back-btn:hover{border-color:var(--accent-blue);color:var(--accent-blue);background:rgba(30,144,255,0.06);}
+.page-title{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;letter-spacing:3px;}
+
+/* COMPONENTS */
+.panel{background:var(--bg-card);border:1px solid var(--border-dim);border-radius:12px;padding:20px;}
+.panel-title{font-size:10px;letter-spacing:3px;color:var(--accent-cyan);font-family:'JetBrains Mono',monospace;margin-bottom:14px;text-transform:uppercase;}
+.btn{padding:9px 20px;border-radius:8px;font-size:13px;cursor:pointer;transition:all .2s;border:1px solid var(--border-mid);background:var(--bg-card);color:var(--text-mid);display:inline-flex;align-items:center;gap:6px;font-family:'Noto Sans TC',sans-serif;}
+.btn:hover{border-color:var(--accent-blue);color:var(--accent-blue);background:rgba(30,144,255,0.08);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;pointer-events:none;}
+.btn.primary{background:rgba(30,144,255,0.13);border-color:var(--accent-blue);color:var(--accent-cyan);}
+.btn.primary:hover{background:rgba(30,144,255,0.22);box-shadow:0 0 16px rgba(30,144,255,0.2);}
+.btn.success{background:rgba(0,229,160,0.1);border-color:var(--success);color:var(--success);}
+.btn.success:hover{background:rgba(0,229,160,0.18);box-shadow:0 0 16px rgba(0,229,160,0.15);}
+.btn.danger{background:rgba(255,64,96,0.08);border-color:var(--danger);color:var(--danger);}
+.btn.danger:hover{background:rgba(255,64,96,0.16);}
+.btn.sm{padding:5px 12px;font-size:12px;}
+.btn.xs{padding:3px 9px;font-size:11px;}
+.inp{background:var(--bg-deep);border:1px solid var(--border-mid);border-radius:7px;color:var(--text-bright);font-size:13px;padding:8px 12px;outline:none;transition:border-color .2s;width:100%;font-family:'Noto Sans TC',sans-serif;}
+.inp:focus{border-color:var(--accent-blue);}
+input[type=range]{-webkit-appearance:none;height:4px;background:var(--border-mid);border-radius:2px;outline:none;cursor:pointer;width:100%;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent-cyan);cursor:pointer;box-shadow:0 0 7px rgba(0,212,255,0.5);}
+
+/* UPLOAD ZONE */
+.upload-zone{border:2px dashed var(--border-mid);border-radius:14px;padding:50px 28px;text-align:center;cursor:pointer;transition:all .3s;background:rgba(10,22,40,0.5);position:relative;}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent-blue);background:rgba(30,144,255,0.04);}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:48px;margin-bottom:12px;}
+.upload-title{font-size:16px;font-weight:600;color:var(--text-bright);margin-bottom:6px;}
+.upload-hint{font-size:11px;color:var(--text-dim);letter-spacing:1px;font-family:'JetBrains Mono',monospace;}
+
+/* TAGS */
+.tag{font-size:10px;padding:2px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace;letter-spacing:1px;}
+.tag-cyan{background:rgba(0,212,255,0.1);color:var(--accent-cyan);border:1px solid rgba(0,212,255,0.2);}
+.tag-green{background:rgba(0,229,160,0.1);color:var(--success);border:1px solid rgba(0,229,160,0.2);}
+.tag-warn{background:rgba(255,170,0,0.1);color:var(--warning);border:1px solid rgba(255,170,0,0.2);}
+
+/* TOAST */
+.toast-container{position:fixed;bottom:28px;right:28px;display:flex;flex-direction:column;gap:7px;z-index:9999;}
+.toast{background:var(--bg-card);border:1px solid var(--border-mid);border-radius:9px;padding:10px 18px;font-size:13px;color:var(--text-bright);box-shadow:0 8px 32px rgba(0,0,0,0.4);animation:toastIn .3s ease;display:flex;align-items:center;gap:8px;}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+
+/* SCROLLBARS */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg-deep);}
+::-webkit-scrollbar-thumb{background:var(--border-mid);border-radius:3px;}
+
+/* SELECT */
+select.inp{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238ab0d0'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer;}
+
+/* EDITOR LAYOUT */
+/* 新增 min-width: 0 確保 Grid/Flex 子元素不會被超長內容撐破 */
+.editor-layout{display:grid;grid-template-columns:1fr 300px;gap:16px;flex:1;min-height:0;min-width:0;}
+.editor-main{display:flex;flex-direction:column;gap:14px;min-height:0;min-width:0;}
+.editor-sidebar{display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+
+/* PREVIEW */
+.preview-wrap{background:var(--bg-panel);border:1px solid var(--border-dim);border-radius:12px;overflow:hidden;position:relative;flex-shrink:0;min-width:0;}
+.preview-toolbar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border-dim);background:rgba(6,14,26,0.6);}
+.preview-label{font-size:10px;letter-spacing:3px;color:var(--accent-cyan);font-family:'JetBrains Mono',monospace;}
+.preview-canvas-wrap{display:flex;align-items:center;justify-content:center;background:rgba(2,8,16,0.6);padding:12px;min-height:280px;}
+#previewCanvas{border-radius:6px;max-width:100%;display:block;box-shadow:0 4px 24px rgba(0,0,0,0.5);}
+.preview-info{padding:10px 16px;border-top:1px solid var(--border-dim);display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+
+/* PLAYBACK CONTROLS */
+.playback-bar{background:var(--bg-card);border:1px solid var(--border-dim);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+
+/* TIMELINE */
+/* 加入 min-width: 0 防止時間軸把版面推擠變寬 */
+.timeline-wrap{background:var(--bg-panel);border:1px solid var(--border-dim);border-radius:10px;padding:12px;overflow-x:auto;min-width:0;}
+.timeline-track{display:flex;gap:3px;min-height:60px;align-items:center;}
+.timeline-thumb{width:52px;height:52px;border-radius:6px;object-fit:cover;border:2px solid var(--border-dim);cursor:pointer;transition:all .2s;flex-shrink:0;}
+.timeline-thumb:hover{border-color:var(--accent-cyan);box-shadow:0 0 8px rgba(0,212,255,0.3);}
+.timeline-thumb.active{border-color:var(--accent-cyan);box-shadow:0 0 10px rgba(0,212,255,0.4);}
+
+/* IMAGE GRID */
+.img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;max-height:300px;overflow-y:auto;}
+.img-thumb-wrap{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border-dim);aspect-ratio:1;cursor:pointer;transition:all .2s;}
+.img-thumb-wrap:hover{border-color:var(--accent-blue);}
+.img-thumb-wrap img{width:100%;height:100%;object-fit:cover;display:block;}
+.img-thumb-info{position:absolute;bottom:0;left:0;right:0;background:rgba(2,8,16,0.8);padding:3px 4px;font-size:8px;font-family:'JetBrains Mono',monospace;color:var(--text-dim);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;}
+.img-thumb-num{position:absolute;top:3px;left:4px;font-family:'Orbitron',monospace;font-size:8px;color:var(--accent-cyan);background:rgba(2,8,16,0.8);padding:1px 4px;border-radius:3px;}
+.img-thumb-del{position:absolute;top:3px;right:3px;background:rgba(255,64,96,0.7);border:none;color:#fff;width:16px;height:16px;border-radius:3px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;}
+.img-thumb-wrap:hover .img-thumb-del{opacity:1;}
+
+/* FPS BUTTONS */
+.fps-group{display:flex;flex-wrap:wrap;gap:5px;}
+.fps-btn{padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border-mid);background:var(--bg-panel);color:var(--text-dim);font-family:'JetBrains Mono',monospace;transition:all .2s;}
+.fps-btn:hover,.fps-btn.active{border-color:var(--accent-cyan);color:var(--accent-cyan);background:rgba(0,212,255,0.08);}
+
+/* PROGRESS BAR */
+.progress-wrap{position:fixed;inset:0;background:rgba(2,8,16,0.88);backdrop-filter:blur(8px);z-index:800;display:none;align-items:center;justify-content:center;}
+.progress-wrap.show{display:flex;}
+.progress-box{background:var(--bg-panel);border:1px solid var(--border-mid);border-radius:16px;padding:36px 48px;min-width:340px;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.6);}
+.progress-title{font-family:'Orbitron',monospace;font-size:16px;letter-spacing:3px;color:var(--accent-cyan);margin-bottom:20px;}
+.progress-bar-outer{background:var(--bg-deep);border-radius:4px;height:8px;margin-bottom:12px;overflow:hidden;border:1px solid var(--border-dim);}
+.progress-bar-inner{height:100%;background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan));border-radius:4px;transition:width .2s;width:0%;}
+.progress-text{font-size:12px;color:var(--text-mid);font-family:'JetBrains Mono',monospace;}
+
+/* SORT INDICATOR */
+.sort-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;}
+.sort-icon{color:var(--accent-cyan);font-size:14px;}
+
+/* RWD 修飾 (加入簡單的行動端排版防護，選用) */
+@media (max-width: 900px) {
+  .editor-layout { grid-template-columns: 1fr; overflow-y: auto; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="header">
+  <div class="header-logo" style="width: auto; height: auto; padding: 4px;">
+    <img src="icon.png" alt="logo" style="display: block; max-height: 36px;">
+  </div>
+  <div class="header-title">串連圖片</div>
+  <div class="header-sub">TIMELAPSE TOOL · by 阿叡</div>
+</div>
+
+<div class="page active" id="home">
+  <div class="home-hero">
+    <h1>圖片串連<br>縮時剪輯</h1>
+    <p>// 上傳照片 · 依時間排序 · 輸出影片 //</p>
+  </div>
+  <div class="tools-grid">
+    <div class="tool-card" onclick="goto('timelapse')">
+      <div class="tool-icon">🎞</div>
+      <div class="tool-label">工具 · 01</div>
+      <div class="tool-name">串連圖片</div>
+      <div class="tool-desc">上傳數百張照片，系統自動依創立日期排序，調整 FPS 與每張間隔，即時預覽並輸出縮時影片。</div>
+      <div class="tool-arrow">→</div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="timelapse">
+  <div class="inner-page" style="height:calc(100vh - 73px);overflow:hidden;display:flex;flex-direction:column;">
+
+    <div class="page-header">
+      <button class="back-btn" onclick="resetAll()">← 返回</button>
+      <div class="page-title">串連圖片</div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;" id="headerActions" style="display:none;">
+        <span id="imgCountBadge" class="tag tag-cyan" style="display:none;"></span>
+        <button class="btn primary sm" onclick="document.getElementById('addMoreInput').click()">＋ 加入圖片</button>
+        <input type="file" id="addMoreInput" multiple accept="image/*" style="display:none" onchange="handleMoreFiles(this.files)">
+        <button class="btn success" id="exportBtn" onclick="exportVideo()" style="display:none;">⬇ 輸出影片</button>
+      </div>
+    </div>
+
+    <div id="uploadStage" style="flex:1;display:flex;align-items:center;justify-content:center;position:relative;">
+      <div id="fullDragOverlay" style="position:absolute;inset:0;border:3px dashed var(--accent-cyan);border-radius:14px;background:rgba(0,212,255,0.06);display:none;align-items:center;justify-content:center;pointer-events:none;z-index:10;">
+        <div style="text-align:center;">
+          <div style="font-size:64px;margin-bottom:12px;">📷</div>
+          <div style="font-family:'Orbitron',monospace;font-size:20px;color:var(--accent-cyan);letter-spacing:3px;">放開以上傳照片</div>
+        </div>
+      </div>
+      <div style="max-width:560px;width:100%;">
+        <div class="upload-zone" id="mainUploadZone">
+          <input type="file" id="mainFileInput" multiple accept="image/*" onchange="handleFiles(this.files)">
+          <div class="upload-icon">📷</div>
+          <div class="upload-title">拖曳或點擊上傳照片</div>
+          <div class="upload-hint" style="margin-top:6px;">支援 JPG · PNG · HEIC · WEBP · GIF<br>可一次上傳數百張，系統自動依創立時間排序</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div id="editorStage" style="display:none;flex:1;overflow:hidden;display:flex;flex-direction:column;gap:14px;padding-bottom:4px;">
+
+      <div class="sort-row" id="sortNotice">
+        <span class="sort-icon">📅</span>
+        <span style="font-size:12px;color:var(--text-mid);font-family:'JetBrains Mono',monospace;">已依 EXIF 創立時間排序</span>
+        <span id="dateRangeLabel" style="font-size:11px;color:var(--text-dim);margin-left:4px;"></span>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <button class="btn xs" onclick="sortImages('asc')" id="sortAscBtn">↑ 舊→新</button>
+          <button class="btn xs" onclick="sortImages('desc')" id="sortDescBtn">↓ 新→舊</button>
+        </div>
+      </div>
+
+      <div class="editor-layout" style="flex:1;min-height:0;">
+
+        <div class="editor-main">
+
+          <div class="preview-wrap">
+            <div class="preview-toolbar">
+              <span class="preview-label">預覽</span>
+              <span id="previewFrameLabel" style="font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-left:6px;"></span>
+              <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+                <span id="previewDurLabel" style="font-size:11px;color:var(--text-mid);font-family:'JetBrains Mono',monospace;"></span>
+                <div id="previewSizeSel" style="display:flex;gap:4px;">
+                  <button class="fps-btn active" onclick="setPreviewSize('fit')" data-sz="fit">自適應</button>
+                  <button class="fps-btn" onclick="setPreviewSize('720')" data-sz="720">720p</button>
+                  <button class="fps-btn" onclick="setPreviewSize('1080')" data-sz="1080">1080p</button>
+                </div>
+              </div>
+            </div>
+            <div class="preview-canvas-wrap" id="previewCanvasWrap">
+              <canvas id="previewCanvas" width="640" height="360"></canvas>
+            </div>
+            <div class="playback-bar" style="border-radius:0;border-left:none;border-right:none;border-bottom:none;border-top:1px solid var(--border-dim);">
+              <button class="btn sm" onclick="prevFrame()">⏮</button>
+              <button class="btn primary sm" id="playPauseBtn" onclick="togglePlayback()">▶ 播放</button>
+              <button class="btn sm" onclick="nextFrame()">⏭</button>
+              <div style="flex:1;margin:0 8px;">
+                <input type="range" id="scrubber" min="0" value="0" oninput="scrubTo(this.value)">
+              </div>
+              <span id="playTimecode" style="font-size:11px;color:var(--text-mid);font-family:'JetBrains Mono',monospace;min-width:70px;text-align:right;">00:00 / 00:00</span>
+            </div>
+          </div>
+
+          <div class="timeline-wrap" style="flex-shrink:0;">
+            <div style="font-size:10px;letter-spacing:2px;color:var(--accent-cyan);font-family:'JetBrains Mono',monospace;margin-bottom:8px;">時間軸</div>
+            <div class="timeline-track" id="timelineTrack"></div>
+          </div>
+
+        </div>
+
+        <div class="editor-sidebar">
+
+          <div class="panel">
+            <div class="panel-title">影格率 (FPS)</div>
+            <div class="fps-group" id="fpsGroup">
+              <button class="fps-btn" onclick="setFps(10)">10</button>
+              <button class="fps-btn" onclick="setFps(15)">15</button>
+              <button class="fps-btn active" onclick="setFps(25)">25</button>
+              <button class="fps-btn" onclick="setFps(30)">30</button>
+              <button class="fps-btn" onclick="setFps(45)">45</button>
+              <button class="fps-btn" onclick="setFps(50)">50</button>
+              <button class="fps-btn" onclick="setFps(60)">60</button>
+            </div>
+            <div style="margin-top:10px;font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;">目前：<span id="fpsLabel" style="color:var(--accent-cyan);">25 fps</span></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">每張照片時長（秒）</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+              <input type="range" id="durationSlider" min="0.033" max="10" step="0.001" value="0.04" oninput="setFrameDurationSec(parseFloat(this.value))">
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <input type="number" id="durationSecInput" class="inp" min="0.001" max="60" step="0.001" value="0.04" style="width:90px;font-size:13px;" oninput="setFrameDurationSec(parseFloat(this.value)||0.04)">
+              <span style="font-size:12px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;">秒 / 張</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-bottom:8px;">
+              對應幀數：<span id="durationLabel" style="color:var(--accent-cyan);">1 幀</span>
+            </div>
+            <div style="font-size:10px;letter-spacing:1px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-bottom:6px;">快速設定</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+              <button class="fps-btn" onclick="setFrameDurationSec(0.1)">0.1s</button>
+              <button class="fps-btn" onclick="setFrameDurationSec(0.2)">0.2s</button>
+              <button class="fps-btn" onclick="setFrameDurationSec(0.5)">0.5s</button>
+              <button class="fps-btn" onclick="setFrameDurationSec(1)">1s</button>
+              <button class="fps-btn" onclick="setFrameDurationSec(2)">2s</button>
+              <button class="fps-btn" onclick="setFrameDurationSec(5)">5s</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">輸出設定</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div>
+                <div style="font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-bottom:5px;">解析度</div>
+                <select class="inp" id="outputRes" style="font-size:12px;">
+                  <option value="original">原始解析度</option>
+                  <option value="3840x2160">4K (3840×2160)</option>
+                  <option value="1920x1080" selected>1080p (1920×1080)</option>
+                  <option value="1280x720">720p (1280×720)</option>
+                  <option value="854x480">480p (854×480)</option>
+                </select>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-bottom:5px;">格式</div>
+                <select class="inp" id="outputFormat" style="font-size:12px;">
+                  <option value="webm">WebM (VP9)</option>
+                  <option value="mp4">MP4 (H.264) — 部分瀏覽器支援</option>
+                </select>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-bottom:5px;">品質</div>
+                <select class="inp" id="outputQuality" style="font-size:12px;">
+                  <option value="0.95">極高 (最大檔案)</option>
+                  <option value="0.85" selected>高</option>
+                  <option value="0.7">標準</option>
+                  <option value="0.5">低 (小檔案)</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top:14px;">
+              <button class="btn success" style="width:100%;justify-content:center;" onclick="exportVideo()">⬇ 輸出影片</button>
+            </div>
+            <div style="margin-top:8px;text-align:center;font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;" id="estDurLabel"></div>
+          </div>
+
+          <div class="panel" style="flex:1;min-height:0;">
+            <div class="panel-title" style="margin-bottom:10px;">圖片清單 (<span id="imgCount2">0</span>)</div>
+            <div class="img-grid" id="imgGrid"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div><div class="progress-wrap" id="progressWrap">
+  <div class="progress-box">
+    <div class="progress-title">正在輸出影片(請勿切換視窗)</div>
+    <div class="progress-bar-outer">
+      <div class="progress-bar-inner" id="progressBar"></div>
+    </div>
+    <div class="progress-text" id="progressText">準備中…</div>
+    <div style="margin-top:16px;">
+      <button class="btn danger sm" onclick="cancelExport()">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ═══════════════ STATE ═══════════════
+let images = [];        // [{file, url, date, name}]
+let fps = 25;
+let frameDuration = 1;  // frames per image
+let durationSec = 1/25; // seconds per image (canonical source)
+let currentFrame = 0;
+let playing = false;
+let playInterval = null;
+let previewSize = 'fit';
+let exportCancelled = false;
+
+// ═══════════════ NAV ═══════════════
+function goto(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function resetAll() {
+  stopPlayback();
+  images = [];
+  currentFrame = 0;
+  document.getElementById('uploadStage').style.display = '';
+  document.getElementById('editorStage').style.display = 'none';
+  document.getElementById('headerActions').style.display = 'none';
+  document.getElementById('exportBtn').style.display = 'none';
+  document.getElementById('imgCountBadge').style.display = 'none';
+  goto('home');
+}
+
+// ═══════════════ TOAST ═══════════════
+function toast(msg, icon='ℹ') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(()=>t.remove(), 3200);
+}
+
+// ═══════════════ DRAG & DROP ═══════════════
+const mainZone = document.getElementById('mainUploadZone');
+mainZone.addEventListener('dragover', e=>{ e.preventDefault(); mainZone.classList.add('dragover'); });
+mainZone.addEventListener('dragleave', ()=>mainZone.classList.remove('dragover'));
+mainZone.addEventListener('drop', e=>{ e.preventDefault(); mainZone.classList.remove('dragover'); if(e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
+
+// Full-page drop when uploadStage is visible (no images yet)
+const uploadStageEl = document.getElementById('uploadStage');
+const fullDragOverlay = document.getElementById('fullDragOverlay');
+let dragCounter = 0;
+
+document.addEventListener('dragenter', e => {
+  if(images.length) return; // editor handles via its own logic
+  dragCounter++;
+  if(e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+    fullDragOverlay.style.display = 'flex';
+    mainZone.classList.add('dragover');
+  }
+});
+document.addEventListener('dragleave', e => {
+  if(images.length) return;
+  dragCounter--;
+  if(dragCounter <= 0) {
+    dragCounter = 0;
+    fullDragOverlay.style.display = 'none';
+    mainZone.classList.remove('dragover');
+  }
+});
+document.addEventListener('dragover', e => {
+  e.preventDefault();
+  if(images.length && e.dataTransfer.files) {} // allow editor drop too
+});
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  dragCounter = 0;
+  fullDragOverlay.style.display = 'none';
+  mainZone.classList.remove('dragover');
+  if(!e.dataTransfer.files.length) return;
+  if(images.length) {
+    handleMoreFiles(e.dataTransfer.files);
+  } else {
+    handleFiles(e.dataTransfer.files);
+  }
+});
+
+// ═══════════════ FILE HANDLING ═══════════════
+async function handleFiles(fileList) {
+  const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+  if(!files.length){ toast('請選擇圖片檔案','⚠'); return; }
+  toast(`讀取 ${files.length} 張照片中…`, '📷');
+  await loadImages(files);
+  showEditor();
+}
+
+async function handleMoreFiles(fileList) {
+  const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+  if(!files.length) return;
+  toast(`加入 ${files.length} 張照片…`, '➕');
+  await loadImages(files, true);
+  rebuildEditor();
+}
+
+async function loadImages(files, append=false) {
+  if(!append) images = [];
+  const promises = files.map(f => new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const url = e.target.result;
+      const date = await getImageDate(f, url);
+      images.push({ file: f, url, date, name: f.name });
+      resolve();
+    };
+    reader.readAsDataURL(f);
+  }));
+  await Promise.all(promises);
+  sortImages('asc', false);
+}
+
+// Read EXIF date from image
+async function getImageDate(file, dataUrl) {
+  // Try reading EXIF from JPEG
+  try {
+    const buf = await file.arrayBuffer();
+    const view = new DataView(buf);
+    if(view.getUint16(0) === 0xFFD8) { // JPEG
+      const exifDate = readExifDate(view);
+      if(exifDate) return exifDate;
+    }
+  } catch(e){}
+  // Fallback: file lastModified
+  return new Date(file.lastModified);
+}
+
+function readExifDate(view) {
+  let offset = 2;
+  while(offset < view.byteLength - 4) {
+    const marker = view.getUint16(offset);
+    const segLen = view.getUint16(offset + 2);
+    if(marker === 0xFFE1) {
+      // APP1 - may contain EXIF
+      try {
+        const exifHeader = '';
+        // Check for Exif header
+        const hdr = String.fromCharCode(
+          view.getUint8(offset+4), view.getUint8(offset+5),
+          view.getUint8(offset+6), view.getUint8(offset+7)
+        );
+        if(hdr === 'Exif') {
+          const tiffStart = offset + 10;
+          const byteOrder = view.getUint16(tiffStart);
+          const le = byteOrder === 0x4949;
+          const ifdOffset = le ? view.getUint32(tiffStart+4, true) : view.getUint32(tiffStart+4, false);
+          const numEntries = le ? view.getUint16(tiffStart+ifdOffset, true) : view.getUint16(tiffStart+ifdOffset, false);
+          for(let i=0; i<numEntries; i++) {
+            const entryOff = tiffStart + ifdOffset + 2 + i*12;
+            const tag = le ? view.getUint16(entryOff, true) : view.getUint16(entryOff, false);
+            if(tag === 0x9003 || tag === 0x0132) { // DateTimeOriginal or DateTime
+              const valOff = le ? view.getUint32(entryOff+8, true) : view.getUint32(entryOff+8, false);
+              let dateStr = '';
+              for(let j=0; j<19; j++) {
+                const ch = view.getUint8(tiffStart + valOff + j);
+                if(ch === 0) break;
+                dateStr += String.fromCharCode(ch);
+              }
+              if(dateStr.length >= 19) {
+                // EXIF format: "YYYY:MM:DD HH:MM:SS"
+                const [datePart, timePart] = dateStr.split(' ');
+                const [y,mo,d] = datePart.split(':');
+                const [h,mi,s] = (timePart||'00:00:00').split(':');
+                const dt = new Date(y, mo-1, d, h, mi, s);
+                if(!isNaN(dt.getTime())) return dt;
+              }
+            }
+          }
+        }
+      } catch(e){}
+    }
+    if(marker === 0xFFDA) break; // start of scan
+    offset += 2 + segLen;
+  }
+  return null;
+}
+
+// ═══════════════ SORT ═══════════════
+let sortOrder = 'asc';
+function sortImages(order, rebuild=true) {
+  sortOrder = order;
+  images.sort((a,b) => order==='asc' ? a.date - b.date : b.date - a.date);
+  document.getElementById('sortAscBtn').classList.toggle('primary', order==='asc');
+  document.getElementById('sortDescBtn').classList.toggle('primary', order==='desc');
+  if(rebuild) rebuildEditor();
+}
+
+// ═══════════════ SHOW EDITOR ═══════════════
+function showEditor() {
+  goto('timelapse');
+  document.getElementById('uploadStage').style.display = 'none';
+  document.getElementById('editorStage').style.display = 'flex';
+  document.getElementById('headerActions').style.display = 'flex';
+  document.getElementById('exportBtn').style.display = '';
+  rebuildEditor();
+}
+
+function rebuildEditor() {
+  stopPlayback();
+  currentFrame = 0;
+  updateBadge();
+  buildTimeline();
+  buildImgGrid();
+  updateScrubber();
+  updateDateRange();
+  drawFrame(0);
+  updateDurationLabel();
+  updateEstDuration();
+}
+
+function updateBadge() {
+  const b = document.getElementById('imgCountBadge');
+  b.textContent = `${images.length} 張`;
+  b.style.display = '';
+  document.getElementById('imgCount2').textContent = images.length;
+}
+
+function updateDateRange() {
+  if(!images.length) return;
+  const first = images[0].date;
+  const last = images[images.length-1].date;
+  document.getElementById('dateRangeLabel').textContent =
+    `${fmtDate(first)} → ${fmtDate(last)}`;
+}
+
+function fmtDate(d) {
+  if(!d || isNaN(d)) return '未知時間';
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+// ═══════════════ TIMELINE ═══════════════
+function buildTimeline() {
+  const track = document.getElementById('timelineTrack');
+  track.innerHTML = '';
+  images.forEach((img, i) => {
+    const el = document.createElement('img');
+    el.src = img.url;
+    el.className = 'timeline-thumb' + (i===currentFrame?' active':'');
+    el.title = img.name + '\n' + fmtDate(img.date);
+    el.onclick = () => { stopPlayback(); scrubTo(i); };
+    track.appendChild(el);
+  });
+}
+
+function updateTimelineActive() {
+  document.querySelectorAll('.timeline-thumb').forEach((el, i) => {
+    el.classList.toggle('active', i===currentFrame);
+  });
+  // Scroll active into view
+  const active = document.querySelectorAll('.timeline-thumb')[currentFrame];
+  if(active) active.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' });
+}
+
+// ═══════════════ IMG GRID ═══════════════
+function buildImgGrid() {
+  const grid = document.getElementById('imgGrid');
+  grid.innerHTML = '';
+  images.forEach((img, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'img-thumb-wrap';
+    wrap.innerHTML = `
+      <img src="${img.url}" alt="${img.name}">
+      <div class="img-thumb-num">${i+1}</div>
+      <div class="img-thumb-info">${img.name}</div>
+      <button class="img-thumb-del" onclick="removeImage(${i},event)">✕</button>
+    `;
+    wrap.querySelector('img').onclick = () => { stopPlayback(); scrubTo(i); };
+    grid.appendChild(wrap);
+  });
+}
+
+function removeImage(i, e) {
+  e.stopPropagation();
+  images.splice(i, 1);
+  if(!images.length){ resetAll(); return; }
+  if(currentFrame >= images.length) currentFrame = images.length-1;
+  rebuildEditor();
+}
+
+// ═══════════════ FPS ═══════════════
+function setFps(v) {
+  fps = v;
+  document.getElementById('fpsLabel').textContent = v + ' fps';
+  document.querySelectorAll('#fpsGroup .fps-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.textContent)===v);
+  });
+  // Sync: when FPS changes, durationSec = 1/fps (1 frame per image)
+  setFrameDurationSec(1 / fps);
+  updateEstDuration();
+  if(playing) { stopPlayback(); startPlayback(); }
+}
+
+// ═══════════════ FRAME DURATION (seconds-based) ═══════════════
+function setFrameDurationSec(sec) {
+  if(isNaN(sec) || sec <= 0) sec = 1/fps;
+  durationSec = sec;
+  frameDuration = Math.max(1, Math.round(sec * fps));
+
+  // Update UI without triggering recursive oninput
+  const slider = document.getElementById('durationSlider');
+  const numInput = document.getElementById('durationSecInput');
+  const clampedSec = Math.min(parseFloat(slider.max), Math.max(parseFloat(slider.min), sec));
+  slider.value = clampedSec;
+  numInput.value = sec.toFixed(sec < 0.1 ? 3 : sec < 1 ? 2 : 1);
+
+  updateDurationLabel();
+  updateEstDuration();
+  if(playing) { stopPlayback(); startPlayback(); }
+}
+
+function setFrameDuration(v) {
+  // legacy compatibility: v = frames
+  setFrameDurationSec(parseInt(v) / fps);
+}
+function setFrameDurationPreset(v) { setFrameDuration(v); }
+
+function updateDurationLabel() {
+  document.getElementById('durationLabel').textContent = frameDuration + ' 幀';
+}
+
+function updateEstDuration() {
+  if(!images.length) return;
+  const secs = images.length * durationSec;
+  const totalFrames = Math.round(secs * fps);
+  document.getElementById('estDurLabel').textContent = `預估時長：${fmtTimecode(secs)}（${totalFrames} 幀）`;
+  document.getElementById('previewDurLabel').textContent = fmtTimecode(secs);
+}
+
+function fmtTimecode(secs) {
+  const m = Math.floor(secs/60);
+  const s = (secs%60).toFixed(1);
+  return `${String(m).padStart(2,'0')}:${s.padStart(4,'0')}`;
+}
+
+// ═══════════════ SCRUBBER ═══════════════
+function updateScrubber() {
+  const sc = document.getElementById('scrubber');
+  sc.max = Math.max(0, images.length-1);
+  sc.value = currentFrame;
+  updatePlayTimecode();
+}
+
+function scrubTo(v) {
+  currentFrame = parseInt(v);
+  document.getElementById('scrubber').value = currentFrame;
+  drawFrame(currentFrame);
+  updateTimelineActive();
+  updatePlayTimecode();
+}
+
+function updatePlayTimecode() {
+  const elapsed = currentFrame * durationSec;
+  const total = images.length * durationSec;
+  document.getElementById('playTimecode').textContent = `${fmtTimecode(elapsed)} / ${fmtTimecode(total)}`;
+  document.getElementById('previewFrameLabel').textContent = `#${currentFrame+1} / ${images.length}`;
+}
+
+// ═══════════════ PREVIEW CANVAS ═══════════════
+const previewCanvas = document.getElementById('previewCanvas');
+const previewCtx = previewCanvas.getContext('2d');
+let imgCache = {};
+
+function setPreviewSize(sz) {
+  previewSize = sz;
+  document.querySelectorAll('#previewSizeSel .fps-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.sz === sz);
+  });
+  drawFrame(currentFrame);
+}
+
+function drawFrame(idx) {
+  if(!images[idx]) return;
+  const img = new Image();
+  img.onload = () => {
+    let w, h;
+    if(previewSize === 'fit') {
+      const wrap = document.getElementById('previewCanvasWrap');
+      const maxW = wrap.clientWidth - 24;
+      const maxH = 320;
+      const ratio = Math.min(maxW/img.width, maxH/img.height, 1);
+      w = Math.floor(img.width * ratio);
+      h = Math.floor(img.height * ratio);
+    } else if(previewSize === '1080') { w=1920; h=1080; }
+    else if(previewSize === '720') { w=1280; h=720; }
+    else { w=img.width; h=img.height; }
+
+    previewCanvas.width = w;
+    previewCanvas.height = h;
+
+    // Draw with letterbox
+    const ratio = Math.min(w/img.width, h/img.height);
+    const dw = img.width*ratio, dh=img.height*ratio;
+    const dx=(w-dw)/2, dy=(h-dh)/2;
+    previewCtx.fillStyle='#000';
+    previewCtx.fillRect(0,0,w,h);
+    previewCtx.drawImage(img,dx,dy,dw,dh);
+
+    // Date overlay
+    const dateStr = fmtDate(images[idx].date);
+    const fz = Math.max(10, Math.min(20, w/60));
+    previewCtx.font = `${fz}px JetBrains Mono, monospace`;
+    previewCtx.fillStyle='rgba(0,0,0,0.5)';
+    previewCtx.fillRect(8, h-fz-14, previewCtx.measureText(dateStr).width+12, fz+10);
+    previewCtx.fillStyle='rgba(0,212,255,0.9)';
+    previewCtx.fillText(dateStr, 14, h-10);
+  };
+  img.src = images[idx].url;
+}
+
+// ═══════════════ PLAYBACK ═══════════════
+function togglePlayback() {
+  if(playing) stopPlayback();
+  else startPlayback();
+}
+
+function startPlayback() {
+  if(!images.length) return;
+  playing = true;
+  document.getElementById('playPauseBtn').textContent = '⏸ 暫停';
+  const interval = durationSec * 1000;
+  playInterval = setInterval(() => {
+    currentFrame = (currentFrame + 1) % images.length;
+    scrubTo(currentFrame);
+  }, interval);
+}
+
+function stopPlayback() {
+  playing = false;
+  clearInterval(playInterval);
+  playInterval = null;
+  document.getElementById('playPauseBtn').textContent = '▶ 播放';
+}
+
+function prevFrame() { stopPlayback(); scrubTo(Math.max(0, currentFrame-1)); }
+function nextFrame() { stopPlayback(); scrubTo(Math.min(images.length-1, currentFrame+1)); }
+
+// ═══════════════ EXPORT ═══════════════
+async function exportVideo() {
+  if(!images.length){ toast('請先加入圖片','⚠'); return; }
+  stopPlayback();
+  exportCancelled = false;
+
+  const resVal = document.getElementById('outputRes').value;
+  const quality = parseFloat(document.getElementById('outputQuality').value);
+  const format = document.getElementById('outputFormat').value;
+  const mimeType = format === 'mp4' ? 'video/mp4' : 'video/webm;codecs=vp9';
+
+  if(!MediaRecorder.isTypeSupported(mimeType)){
+    const fallback = 'video/webm';
+    if(!MediaRecorder.isTypeSupported(fallback)){
+      toast('瀏覽器不支援影片錄製','✕'); return;
+    }
+    toast(`格式降級為 webm`, '⚠');
+  }
+
+  // Determine output dimensions
+  let outW, outH;
+  if(resVal === 'original'){
+    // Use first image's natural size
+    outW = null; outH = null;
+  } else {
+    [outW, outH] = resVal.split('x').map(Number);
+  }
+
+  showProgress();
+
+  // Offscreen canvas for rendering
+  const offCanvas = document.createElement('canvas');
+  if(outW) { offCanvas.width=outW; offCanvas.height=outH; }
+  else { // will set after first image loads
+    const firstImg = await loadImg(images[0].url);
+    offCanvas.width = firstImg.naturalWidth;
+    offCanvas.height = firstImg.naturalHeight;
+  }
+  const offCtx = offCanvas.getContext('2d');
+
+  const stream = offCanvas.captureStream(fps);
+  const recorder = new MediaRecorder(stream, {
+    mimeType: MediaRecorder.isTypeSupported(mimeType) ? mimeType : 'video/webm',
+    videoBitsPerSecond: quality >= 0.9 ? 20000000 : quality >= 0.7 ? 10000000 : 5000000
+  });
+
+  const chunks = [];
+  recorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
+  recorder.onstop = () => {
+    if(exportCancelled){ hideProgress(); return; }
+    const blob = new Blob(chunks, { type: recorder.mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `timelapse_${Date.now()}.${format === 'mp4' ? 'mp4' : 'webm'}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    hideProgress();
+    toast('影片已輸出！', '✓');
+  };
+
+  recorder.start();
+
+  const frameDurationMs = durationSec * 1000;
+  const total = images.length;
+
+  for(let i=0; i<total; i++){
+    if(exportCancelled){ recorder.stop(); return; }
+
+    updateProgress(i, total, `處理第 ${i+1} / ${total} 張…`);
+
+    const img = await loadImg(images[i].url);
+    if(!outW){
+      offCanvas.width = img.naturalWidth;
+      offCanvas.height = img.naturalHeight;
+    }
+
+    const ratio = Math.min(offCanvas.width/img.naturalWidth, offCanvas.height/img.naturalHeight);
+    const dw=img.naturalWidth*ratio, dh=img.naturalHeight*ratio;
+    const dx=(offCanvas.width-dw)/2, dy=(offCanvas.height-dh)/2;
+    offCtx.fillStyle='#000';
+    offCtx.fillRect(0,0,offCanvas.width,offCanvas.height);
+    offCtx.drawImage(img,dx,dy,dw,dh);
+
+    // Timecode overlay
+    const dateStr = fmtDate(images[i].date);
+    const fz = Math.max(12, offCanvas.width/80);
+    offCtx.font = `${fz}px monospace`;
+    offCtx.fillStyle='rgba(0,0,0,0.5)';
+    offCtx.fillRect(8,offCanvas.height-fz-14, offCtx.measureText(dateStr).width+14, fz+12);
+    offCtx.fillStyle='rgba(0,212,255,0.9)';
+    offCtx.fillText(dateStr, 14, offCanvas.height-10);
+
+    // Hold this frame for frameDuration frames
+    await hold(frameDurationMs);
+  }
+
+  recorder.stop();
+}
+
+function loadImg(src) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.src = src;
+  });
+}
+
+function hold(ms) {
+  return new Promise(res => setTimeout(res, ms));
+}
+
+function showProgress() {
+  document.getElementById('progressWrap').classList.add('show');
+}
+function hideProgress() {
+  document.getElementById('progressWrap').classList.remove('show');
+  updateProgress(0, 1, '');
+}
+function updateProgress(cur, total, txt) {
+  const pct = total>0 ? Math.round(cur/total*100) : 0;
+  document.getElementById('progressBar').style.width = pct+'%';
+  document.getElementById('progressText').textContent = txt || `${pct}%`;
+}
+function cancelExport() {
+  exportCancelled = true;
+  hideProgress();
+  toast('已取消輸出','⚠');
+}
+
+// ═══════════════ INIT ═══════════════
+(function init() {
+  // Set initial durationSec = 1/fps = 0.04s for default 25fps
+  durationSec = 1 / fps;
+  const slider = document.getElementById('durationSlider');
+  const numInput = document.getElementById('durationSecInput');
+  if(slider) slider.value = durationSec;
+  if(numInput) numInput.value = durationSec.toFixed(3);
+  const dLabel = document.getElementById('durationLabel');
+  if(dLabel) dLabel.textContent = '1 幀';
+})();
+</script>
+</body>
+</html>
