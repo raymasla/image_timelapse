@@ -6,6 +6,7 @@
 <title>串連圖片 · 縮時工具</title>
 <link rel="icon" href="icon1.png" type="image/png">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/webm-muxer@5/build/webm-muxer.min.js"></script>
 <style>
 :root{
   --bg-void:#020810;--bg-deep:#060e1a;--bg-panel:#0a1628;--bg-card:#0d1e35;--bg-hover:#112240;
@@ -323,8 +324,7 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:url("data:im
               <div>
                 <div style="font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-bottom:5px;">格式</div>
                 <select class="inp" id="outputFormat" style="font-size:12px;">
-                  <option value="webm">WebM (VP9)</option>
-                  <option value="mp4">MP4 (H.264) — 部分瀏覽器支援</option>
+                  <option value="webm" selected>WebM (VP9)</option>
                 </select>
               </div>
               <div>
@@ -357,7 +357,8 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:url("data:im
 
 </div><div class="progress-wrap" id="progressWrap">
   <div class="progress-box">
-    <div class="progress-title">正在輸出影片(請勿切換視窗)</div>
+    <div class="progress-title">正在逐格編碼輸出影片…</div>
+    <div style="font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-bottom:12px;">盡量別切換視窗</div>
     <div class="progress-bar-outer">
       <div class="progress-bar-inner" id="progressBar"></div>
     </div>
@@ -813,104 +814,124 @@ function stopPlayback() {
 function prevFrame() { stopPlayback(); scrubTo(Math.max(0, currentFrame-1)); }
 function nextFrame() { stopPlayback(); scrubTo(Math.min(images.length-1, currentFrame+1)); }
 
-// ═══════════════ EXPORT ═══════════════
+// ═══════════════ EXPORT (WebCodecs + webm-muxer) ═══════════════
 async function exportVideo() {
   if(!images.length){ toast('請先加入圖片','⚠'); return; }
   stopPlayback();
   exportCancelled = false;
 
-  const resVal = document.getElementById('outputRes').value;
-  const quality = parseFloat(document.getElementById('outputQuality').value);
-  const format = document.getElementById('outputFormat').value;
-  const mimeType = format === 'mp4' ? 'video/mp4' : 'video/webm;codecs=vp9';
-
-  if(!MediaRecorder.isTypeSupported(mimeType)){
-    const fallback = 'video/webm';
-    if(!MediaRecorder.isTypeSupported(fallback)){
-      toast('瀏覽器不支援影片錄製','✕'); return;
-    }
-    toast(`格式降級為 webm`, '⚠');
+  if(typeof VideoEncoder === 'undefined') {
+    toast('瀏覽器不支援 WebCodecs，請改用 Chrome 94+','✕');
+    return;
+  }
+  if(typeof WebMMuxer === 'undefined') {
+    toast('webm-muxer 函式庫未載入，請確認網路連線','✕');
+    return;
   }
 
-  // Determine output dimensions
+  const resVal  = document.getElementById('outputRes').value;
+  const quality = parseFloat(document.getElementById('outputQuality').value);
+
+  // 決定輸出尺寸（寬高必須為偶數）
   let outW, outH;
   if(resVal === 'original'){
-    // Use first image's natural size
-    outW = null; outH = null;
+    const firstImg = await loadImg(images[0].url);
+    outW = firstImg.naturalWidth;
+    outH = firstImg.naturalHeight;
   } else {
     [outW, outH] = resVal.split('x').map(Number);
   }
+  outW = Math.round(outW/2)*2;
+  outH = Math.round(outH/2)*2;
+
+  const bitrate = quality >= 0.9 ? 20_000_000
+                : quality >= 0.7 ? 10_000_000
+                :                   5_000_000;
+
+  // 選擇 codec（VP9 最廣泛支援）
+  const codec = 'vp09.00.10.08';
+
+  const support = await VideoEncoder.isConfigSupported({ codec, width: outW, height: outH, bitrate, framerate: fps });
+  if(!support.supported){
+    toast('瀏覽器不支援 VP9 WebCodecs，請改用 Chrome','✕');
+    return;
+  }
 
   showProgress();
+  updateProgress(0, images.length, '初始化編碼器…');
 
-  // Offscreen canvas for rendering
-  const offCanvas = document.createElement('canvas');
-  if(outW) { offCanvas.width=outW; offCanvas.height=outH; }
-  else { // will set after first image loads
-    const firstImg = await loadImg(images[0].url);
-    offCanvas.width = firstImg.naturalWidth;
-    offCanvas.height = firstImg.naturalHeight;
-  }
-  const offCtx = offCanvas.getContext('2d');
-
-  const stream = offCanvas.captureStream(fps);
-  const recorder = new MediaRecorder(stream, {
-    mimeType: MediaRecorder.isTypeSupported(mimeType) ? mimeType : 'video/webm',
-    videoBitsPerSecond: quality >= 0.9 ? 20000000 : quality >= 0.7 ? 10000000 : 5000000
+  // ── webm-muxer 初始化 ──
+  const muxer = new WebMMuxer.Muxer({
+    target: new WebMMuxer.ArrayBufferTarget(),
+    video: { codec: 'V_VP9', width: outW, height: outH, frameRate: fps }
   });
 
-  const chunks = [];
-  recorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
-  recorder.onstop = () => {
-    if(exportCancelled){ hideProgress(); return; }
-    const blob = new Blob(chunks, { type: recorder.mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `timelapse_${Date.now()}.${format === 'mp4' ? 'mp4' : 'webm'}`;
-    a.click();
-    URL.revokeObjectURL(url);
-    hideProgress();
-    toast('影片已輸出！', '✓');
-  };
+  let encodeError = null;
+  const encoder = new VideoEncoder({
+    output(chunk, meta) { muxer.addVideoChunk(chunk, meta); },
+    error(e)            { encodeError = e; }
+  });
+  encoder.configure({ codec, width: outW, height: outH, bitrate, framerate: fps });
 
-  recorder.start();
+  const offCanvas = new OffscreenCanvas(outW, outH);
+  const offCtx    = offCanvas.getContext('2d');
 
-  const frameDurationMs = durationSec * 1000;
-  const total = images.length;
+  const total        = images.length;
+  // 每張圖的持續時間（微秒）
+  const imgDurUs     = Math.round(durationSec * 1_000_000);
+  // 每張圖要塞幾個 video frame（至少 1）
+  const framesPerImg = Math.max(1, Math.round(durationSec * fps));
+  // 每個 video frame 的持續時間（微秒）
+  const vfDurUs      = Math.round(imgDurUs / framesPerImg);
 
-  for(let i=0; i<total; i++){
-    if(exportCancelled){ recorder.stop(); return; }
+  for(let i = 0; i < total; i++){
+    if(exportCancelled){ encoder.close(); muxer.finalize(); hideProgress(); return; }
+    if(encodeError){ toast('編碼錯誤：' + encodeError.message,'✕'); encoder.close(); hideProgress(); return; }
 
-    updateProgress(i, total, `處理第 ${i+1} / ${total} 張…`);
+    updateProgress(i, total, `編碼第 ${i+1} / ${total} 張…`);
 
-    const img = await loadImg(images[i].url);
-    if(!outW){
-      offCanvas.width = img.naturalWidth;
-      offCanvas.height = img.naturalHeight;
+    const img   = await loadImg(images[i].url);
+    const ratio = Math.min(outW / img.naturalWidth, outH / img.naturalHeight);
+    const dw    = img.naturalWidth  * ratio;
+    const dh    = img.naturalHeight * ratio;
+    const dx    = (outW - dw) / 2;
+    const dy    = (outH - dh) / 2;
+
+    offCtx.fillStyle = '#000';
+    offCtx.fillRect(0, 0, outW, outH);
+    offCtx.drawImage(img, dx, dy, dw, dh);
+
+
+
+    // 塞入多幀（保持同一畫面，timestamp 遞增）
+    for(let f = 0; f < framesPerImg; f++){
+      const timestampUs = i * imgDurUs + f * vfDurUs;
+      const vf = new VideoFrame(offCanvas, {
+        timestamp: timestampUs,
+        duration:  vfDurUs
+      });
+      encoder.encode(vf, { keyFrame: (i === 0 && f === 0) });
+      vf.close();
     }
-
-    const ratio = Math.min(offCanvas.width/img.naturalWidth, offCanvas.height/img.naturalHeight);
-    const dw=img.naturalWidth*ratio, dh=img.naturalHeight*ratio;
-    const dx=(offCanvas.width-dw)/2, dy=(offCanvas.height-dh)/2;
-    offCtx.fillStyle='#000';
-    offCtx.fillRect(0,0,offCanvas.width,offCanvas.height);
-    offCtx.drawImage(img,dx,dy,dw,dh);
-
-    // Timecode overlay
-    const dateStr = fmtDate(images[i].date);
-    const fz = Math.max(12, offCanvas.width/80);
-    offCtx.font = `${fz}px monospace`;
-    offCtx.fillStyle='rgba(0,0,0,0.5)';
-    offCtx.fillRect(8,offCanvas.height-fz-14, offCtx.measureText(dateStr).width+14, fz+12);
-    offCtx.fillStyle='rgba(0,212,255,0.9)';
-    offCtx.fillText(dateStr, 14, offCanvas.height-10);
-
-    // Hold this frame for frameDuration frames
-    await hold(frameDurationMs);
   }
 
-  recorder.stop();
+  updateProgress(total, total, '封裝中…');
+  await encoder.flush();
+  encoder.close();
+
+  if(exportCancelled){ hideProgress(); return; }
+
+  muxer.finalize();
+  const { buffer } = muxer.target;
+  const blob = new Blob([buffer], { type: 'video/webm' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `timelapse_${Date.now()}.webm`;
+  a.click();
+  URL.revokeObjectURL(url);
+  hideProgress();
+  toast('影片已輸出！', '✓');
 }
 
 function loadImg(src) {
@@ -921,9 +942,6 @@ function loadImg(src) {
   });
 }
 
-function hold(ms) {
-  return new Promise(res => setTimeout(res, ms));
-}
 
 function showProgress() {
   document.getElementById('progressWrap').classList.add('show');
